@@ -137,7 +137,8 @@ The lists below record the work completed so far and the work that remains open.
 
 - [x] Local control of the Tapo L430P and L535E bulbs over Wi-Fi through python-kasa.
 - [x] Control of the Govee H6125 strip over Bluetooth, including the colour command for hardware version 3.
-- [x] One web application for both vendors with master brightness, per-light switching and brightness, colours and a detail view for each light.
+- [x] One web application for both vendors with master brightness, per-light switching and brightness, preset colours and a detail view for each light.
+- [x] A colour field for any hue and saturation, applied to all lights that are on or to a single light from its detail view.
 - [x] Seven synchronised effects (Rainbow, Wave, Party, Breathe, Candle, Storm and Aurora) with adjustable speed.
 - [x] Effects defined as Python scripts in `effects/`, with each light keeping its own brightness within an effect.
 - [x] Lights that are switched on or off during an effect join or leave it without stopping it.

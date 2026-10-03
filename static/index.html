@@ -62,6 +62,20 @@ button { font: inherit; color: inherit; }
 .swatches { display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 3px solid var(--ink); }
 .swatches button { height: 46px; border: none; border-right: 3px solid var(--ink); cursor: pointer; display: grid; place-items: center; padding: 0; }
 .swatches button:last-child { border-right: none; }
+.field, .d-field {
+  position: relative;
+  touch-action: none;
+  cursor: crosshair;
+  background:
+    linear-gradient(180deg, rgba(238, 235, 227, 0) 0%, var(--paper) 100%),
+    linear-gradient(90deg, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+}
+.field { height: 56px; border-bottom: 3px solid var(--ink); }
+.field .lbl, .d-field .lbl { position: absolute; left: 6px; bottom: 6px; pointer-events: none; }
+.pin { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--ink); box-shadow: 0 0 0 3px var(--paper); transform: scale(0); transition: transform .4s var(--spring); pointer-events: none; }
+.pin.on { transform: scale(1); }
+.d-bottom { position: relative; z-index: 2; display: grid; gap: 14px; }
+.d-field { height: 64px; border: 3px solid currentColor; }
 .mark { width: 12px; height: 12px; background: var(--ink); transform: scale(0); transition: transform .4s var(--spring); }
 .on > .mark { transform: scale(1); }
 
@@ -133,7 +147,7 @@ button { font: inherit; color: inherit; }
 .d-big { display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .d-big .n { font-family: Archivo, sans-serif; font-weight: 900; font-size: 180px; line-height: .78; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
 .d-big small { font-size: 11px; font-weight: 500; letter-spacing: .08em; }
-.detail .drag { left: 0; right: 0; top: calc(110px + env(safe-area-inset-top)); bottom: calc(120px + env(safe-area-inset-bottom)); z-index: 1; }
+.detail .drag { left: 0; right: 0; top: calc(110px + env(safe-area-inset-top)); bottom: calc(200px + env(safe-area-inset-bottom)); z-index: 1; }
 .d-tog {
   position: relative;
   z-index: 2;
@@ -182,6 +196,7 @@ button { font: inherit; color: inherit; }
       <div class="drag" id="masterDrag" role="slider" tabindex="0" aria-label="Brightness of all lights" aria-valuemin="0" aria-valuemax="100"></div>
     </section>
     <div class="swatches" id="swatches"></div>
+    <div class="field" id="field" role="slider" tabindex="0" aria-label="Pick any colour for the lights that are on"><span class="pin" id="pin"></span><span class="lbl">ANY COLOUR</span></div>
     <div class="modes" id="modes"></div>
     <div class="speed" id="speed"><div class="meta"><span>SPEED</span><span id="speedLabel">1×</span></div><div class="speed-keys" id="speedKeys" role="group" aria-label="Mode speed"></div></div>
     <div id="rows"></div>
@@ -192,7 +207,10 @@ button { font: inherit; color: inherit; }
     <span class="d-name" id="dName"></span>
     <div class="d-big"><span class="n" id="dBig">0</span><small>PERCENT · DRAG ANYWHERE</small></div>
     <div class="drag" id="dDrag" role="slider" tabindex="0" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100"></div>
-    <button class="d-tog" id="dTog" type="button">TURN ON</button>
+    <div class="d-bottom">
+      <div class="d-field" id="dField" role="slider" tabindex="0" aria-label="Pick a colour for this light"><span class="pin" id="dPin"></span><span class="lbl">ANY COLOUR</span></div>
+      <button class="d-tog" id="dTog" type="button">TURN ON</button>
+    </div>
   </section>
 </div>
 <div id="toast" role="status"></div>
@@ -202,14 +220,17 @@ const $ = id => document.getElementById(id);
 const PAL = [[30, 95, 62], [28, 90, 78], [40, 35, 92], [355, 85, 60], [42, 95, 58], [155, 65, 55], [215, 90, 62], [265, 80, 68]];
 const PARTY_HUES = [0, 28, 52, 120, 170, 205, 245, 285, 320];
 
-const state = { lights: [], effects: [], active: null, speed: 1, color: loadColor(), detail: null, t: 0, pt: 0 };
+const state = { lights: [], effects: [], active: null, speed: 1, color: loadColor(), custom: loadCustom(), detail: null, t: 0, pt: 0 };
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
 const speedText = v => `${v}×`;
 const touched = new Map();
 const pending = new Map();
 
 function loadColor() {
-  try { const v = +localStorage.getItem("lights.color"); return v >= 0 && v < PAL.length ? v : 0; } catch { return 0; }
+  try { const v = +localStorage.getItem("lights.color"); return v >= -1 && v < PAL.length ? v : 0; } catch { return 0; }
+}
+function loadCustom() {
+  try { return JSON.parse(localStorage.getItem("lights.custom")) || { x: 0, y: 0 }; } catch { return { x: 0, y: 0 }; }
 }
 function saveColor(i) { try { localStorage.setItem("lights.color", i); } catch {} }
 
@@ -260,8 +281,16 @@ function lightLook(l, i, t) {
   return [h, Math.round(30 + 60 * s), Math.round(92 - 32 * s), k];
 }
 
+function baseTriple() {
+  if (state.color >= 0) return PAL[state.color];
+  const sv = 1 - clamp(state.custom.y, 0, 0.95);
+  const l = 1 - sv / 2;
+  const s = l >= 1 ? 0 : (1 - l) / Math.min(l, 1 - l);
+  return [clamp(state.custom.x, 0, 1) * 359, Math.round(s * 100), Math.round(l * 100)];
+}
+
 function preview(key, t) {
-  const [bh, bs, bl] = PAL[state.color];
+  const [bh, bs, bl] = baseTriple();
   switch (key) {
     case "solid": return [bh, bs, bl, .9 + .1 * Math.sin(t * 2)];
     case "rainbow": return [(t * 12) % 360, 85, 60, 1];
@@ -345,16 +374,70 @@ function toggleLight(l) {
   post(`/api/lights/${encodeURIComponent(l.id)}`, { on: l.on });
 }
 
-function pickColor(i) {
-  state.color = i;
-  saveColor(i);
-  const hex = hslHex(...PAL[i]);
+function hsvHex(h, s) {
+  const f = n => { const k = (n + h / 60) % 6; return Math.round(255 * (1 - s * Math.max(0, Math.min(k, 4 - k, 1)))).toString(16).padStart(2, "0"); };
+  return `#${f(5)}${f(3)}${f(1)}`;
+}
+const fieldHex = p => hsvHex(clamp(p.x, 0, 1) * 359, 1 - clamp(p.y, 0, 0.95));
+const baseHex = () => (state.color < 0 ? fieldHex(state.custom) : hslHex(...PAL[state.color]));
+
+function applyColor(hex, final) {
   const noneLit = !lit().length;
   state.active = null;
   touched.set("mode", Date.now());
   touch(online().map(l => l.id));
   for (const l of online()) if (l.on || noneLit) { l.on = true; l.color = hex; l.mode = "color"; if (noneLit) l.level = l.brightness = 70; }
-  sendAll(noneLit ? { color: hex, brightness: 70 } : { color: hex, only_lit: true });
+  const body = noneLit ? { color: hex, brightness: 70 } : { color: hex, only_lit: true };
+  final ? sendAll(body) : sendAllSoon(body);
+}
+
+function pickColor(i) {
+  state.color = i;
+  saveColor(i);
+  applyColor(hslHex(...PAL[i]), true);
+}
+
+function pickCustom(point, final) {
+  state.color = -1;
+  state.custom = point;
+  saveColor(-1);
+  try { localStorage.setItem("lights.custom", JSON.stringify(point)); } catch {}
+  applyColor(fieldHex(point), final);
+}
+
+function setLightColor(l, point, final) {
+  if (!l.online) return toast(`${l.name} isn't reachable`);
+  touch([l.id]);
+  if (state.active) { state.active = null; touched.set("mode", Date.now()); }
+  const hex = fieldHex(point);
+  Object.assign(l, { on: true, color: hex, mode: "color" });
+  const send = () => post(`/api/lights/${encodeURIComponent(l.id)}`, { color: hex, on: true });
+  final ? send() : throttled(`colour-${l.id}`, send)();
+}
+
+function colourField(el, onPick) {
+  let held = false;
+  const at = e => { const r = el.getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) }; };
+  el.addEventListener("pointerdown", e => { held = true; el.setPointerCapture(e.pointerId); onPick(at(e), false); });
+  el.addEventListener("pointermove", e => { if (held) onPick(at(e), false); });
+  el.addEventListener("pointerup", e => { if (held) { held = false; onPick(at(e), true); } });
+  el.addEventListener("pointercancel", () => { held = false; });
+  el.addEventListener("keydown", e => {
+    const step = { ArrowRight: [0.03, 0], ArrowLeft: [-0.03, 0], ArrowUp: [0, -0.05], ArrowDown: [0, 0.05] }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const p = el.dataset.x ? { x: +el.dataset.x, y: +el.dataset.y } : { x: 0, y: 0 };
+    onPick({ x: clamp(p.x + step[0], 0, 1), y: clamp(p.y + step[1], 0, 1) }, true);
+  });
+}
+
+function placePin(pin, field, point, show) {
+  pin.classList.toggle("on", show);
+  if (!point) return;
+  pin.style.left = `${point.x * 100}%`;
+  pin.style.top = `${point.y * 100}%`;
+  field.dataset.x = point.x;
+  field.dataset.y = point.y;
 }
 
 async function pickMode(key) {
@@ -363,7 +446,7 @@ async function pickMode(key) {
   const noneLit = !lit().length;
   state.active = key;
   touched.set("mode", Date.now());
-  const res = await post(`/api/effects/${encodeURIComponent(key)}`, { color: hslHex(...PAL[state.color]), ...(noneLit ? { brightness: 70 } : {}) });
+  const res = await post(`/api/effects/${encodeURIComponent(key)}`, { color: baseHex(), ...(noneLit ? { brightness: 70 } : {}) });
   if (res) state.active = res.active;
 }
 
@@ -461,6 +544,8 @@ dragger($("dDrag"), () => { const l = state.lights.find(x => x.id === state.deta
   v => { const l = state.lights.find(x => x.id === state.detail); if (l) setLight(l, v, true); });
 dragger($("masterDrag"), () => masterLevel(), v => setAll(v, false), v => setAll(v, true));
 $("allBtn").addEventListener("click", () => setAll(lit().length ? 0 : 70, true));
+colourField($("field"), (p, final) => pickCustom(p, final));
+colourField($("dField"), (p, final) => { const l = state.lights.find(x => x.id === state.detail); if (l) setLightColor(l, p, final); });
 
 function masterLevel() {
   const on = lit();
@@ -503,6 +588,7 @@ function render() {
   $("masterDrag").setAttribute("aria-valuenow", master);
 
   [...$("swatches").children].forEach((b, i) => b.classList.toggle("on", i === state.color && active === "solid"));
+  placePin($("pin"), $("field"), state.custom, state.color < 0 && active === "solid");
   [...$("modes").children].forEach(b => {
     b.style.background = solid(preview(b.dataset.key, b.dataset.key === active ? state.pt : t));
     b.classList.toggle("active", b.dataset.key === active);
@@ -537,6 +623,8 @@ function render() {
     $("dName").textContent = d.l.name;
     $("dBig").textContent = d.on ? d.l.level : 0;
     $("dTog").textContent = d.on ? "TURN OFF" : "TURN ON";
+    const [dh, ds] = hexHsv(d.l.color || "#ffffff");
+    placePin($("dPin"), $("dField"), { x: dh / 360, y: 1 - ds }, d.on && d.l.mode === "color" && !state.active);
     $("dDrag").setAttribute("aria-valuenow", d.on ? d.l.level : 0);
   }
 }
