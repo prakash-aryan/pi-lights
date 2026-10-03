@@ -12,7 +12,7 @@ The server in `app.py` is built with FastAPI. It discovers the Tapo bulbs throug
 
 The effect engine in `engine.py` loads every script in `effects/` and assigns one worker to each light. Each worker reads the shared clock, requests the hue, saturation and level for its light from the active script and sends the result as soon as the previous command has been acknowledged. A Tapo bulb requires approximately 120 ms per command when it is addressed alone and does not interpolate between colours. With all four bulbs animating, a round of commands took approximately 180 ms in measurements on the tested setup, which limits each bulb to five to six updates per second.
 
-The strip applies a gamma curve and per-channel gains to its output so that its colours match those of the bulbs. The correction can be adjusted through `/api/strip/calibration`.
+The strip forms white by mixing red, green and blue LEDs because it has no white LEDs. Its colour-temperature command sets every segment to a fixed RGB value for the requested temperature. On the tested strip, 2700 K produced 255, 174, 84, which is the value that the Govee Home app pairs with 2700 K in packets captured for an open pull request of [ha-govee-led-ble](https://github.com/teh-hippo/ha-govee-led-ble/pull/245). This white appears bluer than the white of the bulbs at the same setting, a limitation of RGB-only strips that Govee itself describes ([RGBIC vs RGBICW vs RGBICWW](https://us.govee.com/blogs/product-review-blog/rgbic-vs-rgbww-lighting-technology-which-is-the-best-choice-for-your-home)). The hub therefore does not use this command. It converts a colour temperature to RGB itself and multiplies every colour sent to the strip by a fixed gain for each channel, which is the colour correction method of [FastLED](https://github.com/FastLED/FastLED). The default gains of 1.0, 0.68 and 0.26 for red, green and blue were derived from a visual side-by-side comparison of the strip with the bulbs at 5950 K. They can be replaced through the optional entry `govee.balance` in `config.json`.
 
 ## Hardware
 
@@ -127,7 +127,6 @@ Effects that use random events should schedule these events by time, as `storm.p
 | POST | `/api/effects/{name}` | `speed`, `color`, `brightness` |
 | POST | `/api/effects/settings` | `speed` |
 | POST | `/api/effects/stop` | restores the state from before the effect |
-| GET, POST | `/api/strip/calibration` | `gamma`, `gain`, `level` |
 
 ## Status
 
@@ -143,7 +142,7 @@ The lists below record the work completed so far and the work that remains open.
 - [x] Effects defined as Python scripts in `effects/`, with each light keeping its own brightness within an effect.
 - [x] Lights that are switched on or off during an effect join or leave it without stopping it.
 - [x] Live state updates in the application through server-sent events.
-- [x] Colour correction of the strip through an adjustable gamma curve and channel gains.
+- [x] Colour correction of the strip through a fixed gain for each channel, with whites rendered from a colour temperature.
 - [x] Automatic rediscovery of bulbs that are missing at startup or change their address.
 - [x] Operation as a systemd service that starts at boot.
 - [x] A web app manifest and a service worker so that the application can be installed on a phone.
@@ -151,7 +150,7 @@ The lists below record the work completed so far and the work that remains open.
 ### Open
 
 - [ ] An effect editor in the application. Effects can currently only be created by writing Python code. The editor would compose effects from colours, timing and transitions and store them as data on the Pi so that they load without a restart of the service.
-- [ ] Closer colour matching between the vendors. The correction of the strip was adjusted by eye and the brightness scales of the two vendors are not perceptually aligned. A colour profile for each device derived from colorimeter readings would address this. The colour difference (ΔE2000) between a bulb and the strip at identical settings would serve as the measure of improvement.
+- [ ] Closer colour matching between the vendors. The channel gains of the strip were derived by eye at a single colour temperature. Gains alone cannot compensate for differences between the LED primaries of the two vendors. The brightness scales of the two vendors are also not perceptually aligned. A colour profile for each device derived from colorimeter readings would address this. The colour difference (ΔE2000) between a bulb and the strip at identical settings would serve as the measure of improvement.
 - [ ] Smoother fast effects. A Tapo bulb accepts approximately one command every 120 ms and does not fade between colours. Two untested options exist. One is the Matter interface of the L535E, whose colour commands carry a transition time. The other is a 5 GHz USB Wi-Fi adapter, which could relieve the shared radio of the Pi while the bulbs remain on 2.4 GHz.
 - [ ] Native support for the TPAP protocol. Local control of recent Tapo firmware depends on the Third-Party Compatibility option until python-kasa supports TPAP.
 - [ ] Authentication and HTTPS. Any device on the local network can currently control the lights. HTTPS would also allow installation on Android without a change to the Chrome settings.

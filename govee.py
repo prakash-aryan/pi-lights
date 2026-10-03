@@ -6,8 +6,8 @@ from pathlib import Path
 from bleak import BleakClient, BleakScanner
 
 WRITE = "00010203-0405-0607-0809-0a0b0c0d2b11"
-DEFAULT_CAL = {"gamma": 2.0, "gain": [1.0, 1.0, 1.0], "level": 1.0}
 NOTIFY = "00010203-0405-0607-0809-0a0b0c0d2b10"
+BALANCE = (1.0, 0.68, 0.26)
 
 
 def frame(*payload):
@@ -27,15 +27,15 @@ def kelvin_rgb(kelvin):
 
 
 class GoveeStrip:
-    def __init__(self, address, name, state_file):
+    def __init__(self, address, name, state_file, balance=None):
         self.address = address
+        self.balance = tuple(balance or BALANCE)
         self.name = name
         self.state_file = Path(state_file)
         saved = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
         self.color = saved.get("color", "#ffffff")
         self.mode = saved.get("mode", "color")
         self.temp = saved.get("temp", 0)
-        self.cal = {**DEFAULT_CAL, **saved.get("cal", {})}
         self.on = None
         self.brightness = None
         self.client = None
@@ -108,32 +108,10 @@ class GoveeStrip:
 
     async def refresh(self):
         self.on = (await self.request(0xAA, 0x01))[2] == 1
-        raw = (await self.request(0xAA, 0x04))[2]
-        if self.brightness is None or self.device_level(self.brightness) != raw:
-            self.brightness = max(1, min(100, round(raw / self.cal["level"])))
+        self.brightness = (await self.request(0xAA, 0x04))[2]
 
     def save(self):
-        self.state_file.write_text(json.dumps({"color": self.color, "mode": self.mode, "temp": self.temp, "cal": self.cal}))
-
-    def corrected(self, r, g, b):
-        gamma = self.cal["gamma"]
-        return tuple(max(0, min(255, round(255 * gain * (c / 255) ** gamma))) for c, gain in zip((r, g, b), self.cal["gain"]))
-
-    def device_level(self, percent):
-        return max(1, min(100, round(percent * self.cal["level"])))
-
-    async def set_calibration(self, gamma=None, gain=None, level=None):
-        if gamma is not None:
-            self.cal["gamma"] = max(1.0, min(3.0, float(gamma)))
-        if gain is not None and len(gain) == 3:
-            self.cal["gain"] = [max(0.3, min(1.0, float(x))) for x in gain]
-        if level is not None:
-            self.cal["level"] = max(0.2, min(2.0, float(level)))
-        self.save()
-        if self.online and self.on:
-            await self.send_rgb(*(int(self.color[i:i + 2], 16) for i in (1, 3, 5)))
-            if self.brightness:
-                await self.set_brightness(self.brightness)
+        self.state_file.write_text(json.dumps({"color": self.color, "mode": self.mode, "temp": self.temp}))
 
     async def set_power(self, on):
         await self.command(0x33, 0x01, 1 if on else 0)
@@ -141,12 +119,18 @@ class GoveeStrip:
 
     async def set_brightness(self, percent):
         percent = max(1, min(100, int(percent)))
-        await self.command(0x33, 0x04, self.device_level(percent))
+        await self.command(0x33, 0x04, percent)
         self.brightness = percent
 
+    def balanced(self, r, g, b):
+        scaled = [c * k for c, k in zip((r, g, b), self.balance)]
+        peak = max(scaled)
+        if peak == 0:
+            return 0, 0, 0
+        return tuple(round(c * max(r, g, b) / peak) for c in scaled)
+
     async def send_rgb(self, r, g, b):
-        cr, cg, cb = self.corrected(r, g, b)
-        await self.command(0x33, 0x05, 0x15, 0x01, cr, cg, cb, 0, 0, 0, 0, 0, 0xFF, 0x7F)
+        await self.command(0x33, 0x05, 0x15, 0x01, *self.balanced(r, g, b), 0, 0, 0, 0, 0, 0xFF, 0x7F)
         self.color = f"#{r:02x}{g:02x}{b:02x}"
 
     async def set_color(self, hex_color):
@@ -156,6 +140,7 @@ class GoveeStrip:
         self.save()
 
     async def set_white(self, kelvin):
+        kelvin = max(2000, min(9000, int(kelvin)))
         await self.send_rgb(*kelvin_rgb(kelvin))
         self.mode = "white"
         self.temp = int(kelvin)

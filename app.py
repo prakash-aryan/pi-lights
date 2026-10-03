@@ -24,7 +24,7 @@ ORDER = list(NAMES)
 bulbs = {}
 offline = set()
 locks = {}
-strip = GoveeStrip(CONFIG["govee"]["address"], CONFIG["govee"]["name"], BASE / "strip_state.json")
+strip = GoveeStrip(CONFIG["govee"]["address"], CONFIG["govee"]["name"], BASE / "strip_state.json", CONFIG["govee"].get("balance"))
 
 
 class Change(BaseModel):
@@ -35,16 +35,35 @@ class Change(BaseModel):
     only_lit: bool = False
 
 
-class Calibration(BaseModel):
-    gamma: float | None = None
-    gain: list[float] | None = None
-    level: float | None = None
-
-
 class EffectSettings(BaseModel):
     speed: float | None = None
     brightness: int | None = None
     color: str | None = None
+
+
+def srgb_linear(c):
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def white_kelvin(hex_color):
+    r, g, b = (int(hex_color.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    if max(r, g, b) == 0 or colorsys.rgb_to_hsv(r, g, b)[1] >= 0.15:
+        return None
+    lr, lg, lb = (srgb_linear(c) for c in (r, g, b))
+    x_ = 0.4124 * lr + 0.3576 * lg + 0.1805 * lb
+    y_ = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+    z_ = 0.0193 * lr + 0.1192 * lg + 0.9505 * lb
+    x, y = x_ / (x_ + y_ + z_), y_ / (x_ + y_ + z_)
+    n = (x - 0.3320) / (0.1858 - y)
+    kelvin = 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.33
+    return round(max(2500, min(6500, kelvin)) / 50) * 50
+
+
+def as_white(change):
+    kelvin = white_kelvin(change.color) if change.color else None
+    if kelvin is None:
+        return change
+    return change.model_copy(update={"color": None, "temp": kelvin})
 
 
 def lock_for(mac):
@@ -264,6 +283,7 @@ def state_of(lid):
 
 @app.post("/api/lights/{light_id}")
 async def change_light(light_id: str, change: Change):
+    change = as_white(change)
     if light_id != "strip" and light_id not in bulbs:
         raise HTTPException(404, "unknown light")
     try:
@@ -285,6 +305,7 @@ async def change_light(light_id: str, change: Change):
 
 @app.post("/api/all")
 async def change_all(change: Change):
+    change = as_white(change)
     targets = [mac for mac in bulbs if mac not in offline]
     use_strip = strip.online
     if keeps_effect(change):
@@ -331,20 +352,6 @@ async def all_on():
     if strip.online:
         jobs.append(switch("strip", True))
     await asyncio.gather(*jobs, return_exceptions=True)
-
-
-@app.get("/api/strip/calibration")
-async def get_calibration():
-    return strip.cal
-
-
-@app.post("/api/strip/calibration")
-async def set_calibration(cal: Calibration):
-    try:
-        await strip.set_calibration(cal.gamma, cal.gain, cal.level)
-    except Exception as e:
-        raise HTTPException(503, str(e))
-    return strip.cal
 
 
 @app.get("/api/effects")
