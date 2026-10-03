@@ -1,0 +1,12 @@
+[project]
+name = "pi-lights"
+version = "0.1.0"
+description = "Local lighting hub for Tapo bulbs and a Govee Bluetooth strip on a Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "bleak==3.0.2",
+    "fastapi==0.142.2",
+    "python-kasa==0.10.2",
+    "uvicorn[standard]==0.54.0",
+]

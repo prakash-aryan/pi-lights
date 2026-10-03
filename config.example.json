@@ -1,0 +1,17 @@
+{
+  "broadcast": "192.168.1.255",
+  "names": {
+    "AA:BB:CC:00:00:01": "Table 1",
+    "AA:BB:CC:00:00:02": "Table 2",
+    "AA:BB:CC:00:00:03": "Bed 1",
+    "AA:BB:CC:00:00:04": "Bed 2"
+  },
+  "rooms": {
+    "AA:BB:CC:00:00:01": "Living room",
+    "strip": "Office"
+  },
+  "govee": {
+    "address": "AA:BB:CC:00:00:FF",
+    "name": "Strip"
+  }
+}

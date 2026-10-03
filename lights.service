@@ -1,0 +1,14 @@
+[Unit]
+Description=Lights control server
+After=network-online.target bluetooth.service
+Wants=network-online.target bluetooth.service
+
+[Service]
+EnvironmentFile=/etc/lights.env
+WorkingDirectory=/opt/lights
+ExecStart=/opt/lights/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 80
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

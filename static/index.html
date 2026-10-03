@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0b" id="themeColor">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lights">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Lights</title>
+<style>
+@font-face { font-family: "Archivo"; src: url("archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("jetbrains-mono.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+:root { --paper: #eeebe3; --ink: #0b0b0b; --spring: cubic-bezier(.34, 1.56, .64, 1); }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { background: #d9d6cf; }
+body { margin: 0; min-height: 100vh; font-family: "JetBrains Mono", monospace; color: var(--ink); overflow-x: hidden; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
+
+.app { position: relative; max-width: 480px; min-height: 100vh; margin: 0 auto; background: var(--paper); overflow: hidden; }
+.home { transition: transform .65s cubic-bezier(.22, 1.2, .36, 1); }
+.detail-open .home { transform: translateY(-6vh); }
+
+.slab {
+  position: relative;
+  height: calc(330px + env(safe-area-inset-top));
+  padding: calc(58px + env(safe-area-inset-top)) 18px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  transition: color .3s;
+}
+.slab.lit { color: var(--ink); }
+.meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 500; letter-spacing: .08em; }
+.meta.top { position: relative; z-index: 2; }
+.meta.low { pointer-events: none; }
+.btn-all {
+  padding: 8px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 2px solid var(--ink);
+  font: 700 11px "JetBrains Mono", monospace;
+  letter-spacing: .08em;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--paper);
+  transition: transform .2s var(--spring), box-shadow .2s;
+}
+.btn-all:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--paper); }
+.big { display: flex; align-items: flex-start; gap: 4px; pointer-events: none; }
+.big .n { font-family: Archivo, sans-serif; font-weight: 900; font-stretch: 125%; font-size: 150px; line-height: .8; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.big .p { font-family: Archivo, sans-serif; font-weight: 900; font-size: 40px; line-height: 1; }
+.drag { position: absolute; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+.slab .drag { left: 0; right: 0; bottom: 0; height: 230px; z-index: 1; }
+
+.swatches { display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 3px solid var(--ink); }
+.swatches button { height: 46px; border: none; border-right: 3px solid var(--ink); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.swatches button:last-child { border-right: none; }
+.mark { width: 12px; height: 12px; background: var(--ink); transform: scale(0); transition: transform .4s var(--spring); }
+.on > .mark { transform: scale(1); }
+
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); }
+.modes button { aspect-ratio: 1; border: none; border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink); padding: 6px; display: flex; align-items: flex-end; cursor: pointer; }
+.modes button:nth-child(4n) { border-right: none; }
+.lbl { padding: 3px 5px; font: 700 10px "JetBrains Mono", monospace; letter-spacing: .04em; background: var(--paper); color: var(--ink); }
+.active > .lbl { background: var(--ink); color: var(--paper); }
+
+.speed { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; border-bottom: 3px solid var(--ink); transition: opacity .3s; }
+.speed.idle { opacity: .35; pointer-events: none; }
+.speed-keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.speed-keys button {
+  height: 34px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 11px "JetBrains Mono", monospace;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform .3s var(--spring), box-shadow .3s;
+}
+.speed-keys button.on { background: var(--ink); color: var(--paper); box-shadow: 0 0 0 var(--ink); transform: translate(3px, 3px); }
+.row { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; border-bottom: 3px solid var(--ink); }
+.row.away { opacity: .45; }
+.row-top { display: flex; align-items: center; gap: 12px; }
+.idx { font-size: 11px; font-weight: 500; }
+.name { flex: 1; min-width: 0; background: none; border: none; padding: 0; text-align: left; cursor: pointer; font-family: Archivo, sans-serif; font-weight: 800; font-stretch: 125%; font-size: 26px; letter-spacing: -.03em; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tog {
+  width: 58px;
+  height: 34px;
+  flex: none;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 11px "JetBrains Mono", monospace;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform .3s var(--spring), box-shadow .3s;
+}
+.tog.on { background: var(--ink); color: var(--paper); box-shadow: 0 0 0 var(--ink); transform: translate(3px, 3px); }
+.bar { position: relative; height: 14px; border: 2px solid var(--ink); background: var(--paper); }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width .45s cubic-bezier(.34, 1.3, .64, 1); }
+.bar .drag { left: 0; right: 0; top: -11px; bottom: -11px; }
+.dragging .fill { transition: none; }
+
+.detail {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(58px + env(safe-area-inset-top)) 18px calc(30px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--ink);
+  color: var(--paper);
+  transform: translateY(102%);
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform .65s cubic-bezier(.22, 1.15, .36, 1), visibility .65s, color .3s;
+}
+.detail-open .detail { transform: none; pointer-events: auto; visibility: visible; }
+.detail.lit { color: var(--ink); }
+.back { background: none; border: none; padding: 6px 0; font: 700 12px "JetBrains Mono", monospace; letter-spacing: .08em; cursor: pointer; }
+.d-name { font-family: Archivo, sans-serif; font-weight: 900; font-stretch: 125%; font-size: 64px; line-height: .85; letter-spacing: -.04em; text-transform: uppercase; pointer-events: none; overflow-wrap: anywhere; }
+.d-big { display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.d-big .n { font-family: Archivo, sans-serif; font-weight: 900; font-size: 180px; line-height: .78; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+.d-big small { font-size: 11px; font-weight: 500; letter-spacing: .08em; }
+.detail .drag { left: 0; right: 0; top: calc(110px + env(safe-area-inset-top)); bottom: calc(120px + env(safe-area-inset-bottom)); z-index: 1; }
+.d-tog {
+  position: relative;
+  z-index: 2;
+  height: 60px;
+  border: 3px solid currentColor;
+  background: transparent;
+  font: 700 14px "JetBrains Mono", monospace;
+  letter-spacing: .1em;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 currentColor;
+  transition: transform .25s var(--spring), box-shadow .25s;
+}
+.d-tog:active { transform: translate(4px, 4px); box-shadow: 0 0 0 currentColor; }
+
+#toast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  max-width: calc(100% - 36px);
+  padding: 10px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 2px solid var(--paper);
+  box-shadow: 3px 3px 0 var(--ink);
+  font: 700 11px "JetBrains Mono", monospace;
+  letter-spacing: .06em;
+  transform: translate(-50%, 160%);
+  visibility: hidden;
+  transition: transform .4s var(--spring), visibility .4s;
+}
+#toast.show { transform: translate(-50%, 0); visibility: visible; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="home">
+    <section class="slab" id="slab" aria-label="All lights">
+      <div class="meta top"><span id="modeLabel">MODE/SOLID</span><button class="btn-all" id="allBtn" type="button">ALL ON</button></div>
+      <div class="big"><span class="n" id="master">0</span><span class="p">%</span></div>
+      <div class="meta low"><span>DRAG TO DIM</span><span id="count">0/05 ON</span></div>
+      <div class="drag" id="masterDrag" role="slider" tabindex="0" aria-label="Brightness of all lights" aria-valuemin="0" aria-valuemax="100"></div>
+    </section>
+    <div class="swatches" id="swatches"></div>
+    <div class="modes" id="modes"></div>
+    <div class="speed" id="speed"><div class="meta"><span>SPEED</span><span id="speedLabel">1×</span></div><div class="speed-keys" id="speedKeys" role="group" aria-label="Mode speed"></div></div>
+    <div id="rows"></div>
+  </div>
+
+  <section class="detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="dName">
+    <div class="meta top"><button class="back" id="backBtn" type="button">← BACK</button><span id="dMeta"></span></div>
+    <span class="d-name" id="dName"></span>
+    <div class="d-big"><span class="n" id="dBig">0</span><small>PERCENT · DRAG ANYWHERE</small></div>
+    <div class="drag" id="dDrag" role="slider" tabindex="0" aria-label="Brightness" aria-valuemin="0" aria-valuemax="100"></div>
+    <button class="d-tog" id="dTog" type="button">TURN ON</button>
+  </section>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const PAL = [[30, 95, 62], [28, 90, 78], [40, 35, 92], [355, 85, 60], [42, 95, 58], [155, 65, 55], [215, 90, 62], [265, 80, 68]];
+const PARTY_HUES = [0, 28, 52, 120, 170, 205, 245, 285, 320];
+
+const state = { lights: [], effects: [], active: null, speed: 1, color: loadColor(), detail: null, t: 0, pt: 0 };
+const SPEEDS = [0.25, 0.5, 1, 2, 4];
+const speedText = v => `${v}×`;
+const touched = new Map();
+const pending = new Map();
+
+function loadColor() {
+  try { const v = +localStorage.getItem("lights.color"); return v >= 0 && v < PAL.length ? v : 0; } catch { return 0; }
+}
+function saveColor(i) { try { localStorage.setItem("lights.color", i); } catch {} }
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function hslHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, "0"); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+function hexHsv(hex) {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, max ? d / max : 0];
+}
+const solid = c => `hsl(${c[0].toFixed(0)},${c[1]}%,${Math.min(97, c[2] * (.35 + .65 * c[3])).toFixed(1)}%)`;
+function hslRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k = (n + h / 30) % 12; return 255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))); };
+  return [f(0), f(8), f(4)];
+}
+const solidRgb = c => hslRgb(c[0], c[1], Math.min(97, c[2] * (.35 + .65 * c[3])));
+const shown = new Map();
+const isLight = rgb => (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255 > 0.42;
+function blend(key, rgb, rate = .28) {
+  const prev = shown.get(key) || rgb;
+  const next = prev.map((v, i) => v + (rgb[i] - v) * rate);
+  shown.set(key, next);
+  return `rgb(${next.map(Math.round).join(",")})`;
+}
+const INK = [11, 11, 11];
+const ease = (t, p) => .5 - .5 * Math.cos(2 * Math.PI * t / p);
+
+function kelvinHex(k) {
+  const x = k / 100;
+  const r = x <= 66 ? 255 : 329.7 * Math.pow(x - 60, -0.1332);
+  const g = x <= 66 ? 99.47 * Math.log(x) - 161.12 : 288.12 * Math.pow(x - 60, -0.0755);
+  const b = x >= 66 ? 255 : x <= 19 ? 0 : 138.52 * Math.log(x - 10) - 305.04;
+  return "#" + [r, g, b].map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, "0")).join("");
+}
+
+function lightLook(l, i, t) {
+  const [h, s] = hexHsv(l.mode === "white" && l.temp ? kelvinHex(l.temp) : l.color || "#ffffff");
+  const k = state.active ? clamp((l.brightness || 0) / Math.max(1, l.level || 1), 0, 1) : .9 + .1 * Math.sin(t * 2 + i);
+  return [h, Math.round(30 + 60 * s), Math.round(92 - 32 * s), k];
+}
+
+function preview(key, t) {
+  const [bh, bs, bl] = PAL[state.color];
+  switch (key) {
+    case "solid": return [bh, bs, bl, .9 + .1 * Math.sin(t * 2)];
+    case "rainbow": return [(t * 12) % 360, 85, 60, 1];
+    case "wave": return [(t * 12 + 180) % 360, 85, 60, 1];
+    case "party": { const beat = Math.floor(t / .9); return [PARTY_HUES[(beat * 7919) % PARTY_HUES.length], 90, 58, 1]; }
+    case "breathe": return [bh, bs, bl, .1 + .9 * ease(t, 6)];
+    case "candle": { const f = .5 + .22 * Math.sin(t * 2.1) + .16 * Math.sin(t * 5.3 + 1.3) + .12 * Math.sin(t * 9.7 + 2.7); return [28 + 6 * Math.sin(t * .7), 95, 56, .35 + .65 * clamp(f, 0, 1)]; }
+    case "storm": { const f = Math.sin(t * .9) * Math.sin(t * 2.3); return f > .9 ? [210, 30, 95, 1] : [228, 70, 45, .3]; }
+    case "aurora": return [(200 + 100 * Math.sin(t * .11)) % 360, 75, 58, .45 + .55 * ease(t, 9)];
+    default: { let hash = 0; for (const c of key) hash = (hash * 31 + c.charCodeAt(0)) % 360; return [(hash + t * 20) % 360, 80, 60, 1]; }
+  }
+}
+
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg.toUpperCase();
+  el.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove("show"), 3200);
+}
+
+async function post(path, body) {
+  try {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    return r.json();
+  } catch (e) {
+    toast(`Couldn't update: ${e.message}`);
+    return null;
+  }
+}
+
+function touch(ids) { const now = Date.now(); ids.forEach(id => touched.set(id, now)); }
+
+function accept(list) {
+  const prev = state.lights;
+  state.lights = list.map(l => (Date.now() - (touched.get(l.id) || 0) < 1500 ? prev.find(x => x.id === l.id) || l : l));
+  if ($("rows").children.length !== state.lights.length) buildRows();
+}
+
+function throttled(key, fn, ms = 250) {
+  return (...args) => {
+    const p = pending.get(key) || { last: 0, timer: 0 };
+    clearTimeout(p.timer);
+    const wait = ms - (Date.now() - p.last);
+    const run = () => { p.last = Date.now(); fn(...args); };
+    if (wait <= 0) run(); else p.timer = setTimeout(run, wait);
+    pending.set(key, p);
+  };
+}
+
+const online = () => state.lights.filter(l => l.online);
+const lit = () => online().filter(l => l.on);
+
+function setAll(level, final) {
+  const ids = online().map(l => l.id);
+  touch(ids);
+  for (const l of online()) { l.on = level > 0; if (level) { l.level = level; if (!state.active) l.brightness = level; } }
+  const body = level > 0 ? { on: true, brightness: level } : { on: false };
+  final ? sendAll(body) : sendAllSoon(body);
+}
+async function sendAll(body) {
+  const res = await post("/api/all", body);
+  if (res) accept(res);
+}
+const sendAllSoon = throttled("all", sendAll);
+
+function setLight(l, level, final) {
+  if (!l.online) return toast(`${l.name} isn't reachable`);
+  touch([l.id]);
+  l.on = level > 0;
+  if (level) { l.level = level; if (!state.active) l.brightness = level; }
+  const body = level > 0 ? { on: true, brightness: level } : { on: false };
+  const send = () => post(`/api/lights/${encodeURIComponent(l.id)}`, body);
+  final ? send() : throttled(l.id, send)();
+}
+function toggleLight(l) {
+  if (!l.online) return toast(`${l.name} isn't reachable`);
+  touch([l.id]);
+  l.on = !l.on;
+  post(`/api/lights/${encodeURIComponent(l.id)}`, { on: l.on });
+}
+
+function pickColor(i) {
+  state.color = i;
+  saveColor(i);
+  const hex = hslHex(...PAL[i]);
+  const noneLit = !lit().length;
+  state.active = null;
+  touched.set("mode", Date.now());
+  touch(online().map(l => l.id));
+  for (const l of online()) if (l.on || noneLit) { l.on = true; l.color = hex; l.mode = "color"; if (noneLit) l.level = l.brightness = 70; }
+  sendAll(noneLit ? { color: hex, brightness: 70 } : { color: hex, only_lit: true });
+}
+
+async function pickMode(key) {
+  if (key === "solid") return pickColor(state.color);
+  if (state.active === key) return;
+  const noneLit = !lit().length;
+  state.active = key;
+  touched.set("mode", Date.now());
+  const res = await post(`/api/effects/${encodeURIComponent(key)}`, { color: hslHex(...PAL[state.color]), ...(noneLit ? { brightness: 70 } : {}) });
+  if (res) state.active = res.active;
+}
+
+function dragger(el, getValue, onMove, onDone) {
+  let start = null, moving = false;
+  const at = e => { const r = el.getBoundingClientRect(); return clamp(Math.round((e.clientX - r.left) / r.width * 100), 0, 100); };
+  el.addEventListener("pointerdown", e => { start = { x: e.clientX, y: e.clientY, id: e.pointerId }; moving = false; });
+  el.addEventListener("pointermove", e => {
+    if (!start) return;
+    if (!moving && Math.abs(e.clientX - start.x) > 6 && Math.abs(e.clientX - start.x) > Math.abs(e.clientY - start.y)) {
+      moving = true;
+      el.setPointerCapture(e.pointerId);
+      el.closest(".row")?.classList.add("dragging");
+    }
+    if (moving) onMove(at(e));
+  });
+  el.addEventListener("pointerup", e => {
+    if (!start) return;
+    onDone(at(e));
+    el.closest(".row")?.classList.remove("dragging");
+    start = null;
+  });
+  el.addEventListener("pointercancel", () => { start = null; el.closest(".row")?.classList.remove("dragging"); });
+  el.addEventListener("keydown", e => {
+    const step = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    onDone(clamp(getValue() + step, 0, 100));
+  });
+}
+
+PAL.forEach((p, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.style.background = `hsl(${p[0]},${p[1]}%,${p[2]}%)`;
+  b.setAttribute("aria-label", `Colour ${i + 1}`);
+  b.innerHTML = '<span class="mark"></span>';
+  b.addEventListener("click", () => pickColor(i));
+  $("swatches").append(b);
+});
+
+SPEEDS.forEach(v => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.v = v;
+  b.textContent = speedText(v);
+  b.setAttribute("aria-label", `Speed ${speedText(v)}`);
+  b.addEventListener("click", () => {
+    state.speed = v;
+    touched.set("speed", Date.now());
+    post("/api/effects/settings", { speed: v });
+  });
+  $("speedKeys").append(b);
+});
+
+function buildModes() {
+  $("modes").innerHTML = "";
+  for (const m of [{ id: "solid", name: "Solid" }, ...state.effects]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.key = m.id;
+    b.innerHTML = `<span class="lbl"></span>`;
+    b.firstChild.textContent = m.name.toUpperCase();
+    b.setAttribute("aria-label", `${m.name} mode`);
+    b.addEventListener("click", () => pickMode(m.id));
+    $("modes").append(b);
+  }
+}
+
+function buildRows() {
+  $("rows").innerHTML = "";
+  state.lights.forEach((l0, i) => {
+    const id = l0.id;
+    const find = () => state.lights.find(x => x.id === id);
+    const r = document.createElement("div");
+    r.className = "row";
+    r.dataset.id = id;
+    r.innerHTML = `<div class="row-top"><span class="idx">${String(i + 1).padStart(2, "0")}</span><button class="name" type="button"></button><button class="tog" type="button"></button></div>
+      <div class="bar"><div class="fill"></div><div class="drag" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100"></div></div>`;
+    r.querySelector(".name").addEventListener("click", () => openDetail(id));
+    r.querySelector(".tog").addEventListener("click", () => toggleLight(find()));
+    const drag = r.querySelector(".drag");
+    dragger(drag, () => { const l = find(); return l.on ? l.level : 0; }, v => setLight(find(), v, false), v => setLight(find(), v, true));
+    $("rows").append(r);
+  });
+}
+
+function openDetail(id) { state.detail = id; document.body.classList.add("detail-open"); $("backBtn").focus({ preventScroll: true }); }
+function closeDetail() { state.detail = null; document.body.classList.remove("detail-open"); }
+$("backBtn").addEventListener("click", closeDetail);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+$("dTog").addEventListener("click", () => { const l = state.lights.find(x => x.id === state.detail); if (l) toggleLight(l); });
+dragger($("dDrag"), () => { const l = state.lights.find(x => x.id === state.detail); return l && l.on ? l.level : 0; },
+  v => { const l = state.lights.find(x => x.id === state.detail); if (l) setLight(l, v, false); },
+  v => { const l = state.lights.find(x => x.id === state.detail); if (l) setLight(l, v, true); });
+dragger($("masterDrag"), () => masterLevel(), v => setAll(v, false), v => setAll(v, true));
+$("allBtn").addEventListener("click", () => setAll(lit().length ? 0 : 70, true));
+
+function masterLevel() {
+  const on = lit();
+  return on.length ? Math.round(on.reduce((s, l) => s + (l.level || 0), 0) / on.length) : 0;
+}
+
+let lastTheme = "";
+let themeAt = 0;
+function render() {
+  const t = state.t;
+  const L = state.lights.map((l, i) => {
+    const c = lightLook(l, i, t);
+    const on = l.online && l.on;
+    return { l, c, a: on ? c[3] * (.35 + .65 * (l.level || 0) / 100) : 0, css: blend(l.id, solidRgb(c)), rgb: solidRgb(c), on };
+  });
+  const litL = L.filter(x => x.on).sort((x, y) => y.a - x.a);
+  const main = litL[0];
+  const master = masterLevel();
+  const total = state.lights.length;
+
+  const slab = $("slab");
+  slab.style.backgroundColor = blend("slab", main ? main.rgb : INK);
+  slab.classList.toggle("lit", isLight(shown.get("slab")));
+  const theme = slab.style.backgroundColor;
+  if (theme !== lastTheme && t - themeAt > .4) { $("themeColor").content = theme; lastTheme = theme; themeAt = t; }
+
+  const active = state.active || "solid";
+  const activeName = active === "solid" ? "Solid" : (state.effects.find(e => e.id === active) || { name: active }).name;
+  $("modeLabel").textContent = "MODE/" + activeName.toUpperCase();
+  $("allBtn").textContent = litL.length ? "ALL OFF" : "ALL ON";
+  $("speed").classList.toggle("idle", active === "solid");
+  $("speedLabel").textContent = active === "solid" ? "PICK A MODE" : speedText(state.speed);
+  [...$("speedKeys").children].forEach(b => {
+    const on = +b.dataset.v === state.speed;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  $("master").textContent = master;
+  $("count").textContent = `${litL.length}/${String(total).padStart(2, "0")} ON`;
+  $("masterDrag").setAttribute("aria-valuenow", master);
+
+  [...$("swatches").children].forEach((b, i) => b.classList.toggle("on", i === state.color && active === "solid"));
+  [...$("modes").children].forEach(b => {
+    b.style.background = solid(preview(b.dataset.key, b.dataset.key === active ? state.pt : t));
+    b.classList.toggle("active", b.dataset.key === active);
+    b.setAttribute("aria-pressed", String(b.dataset.key === active));
+  });
+
+  [...$("rows").children].forEach(r => {
+    const x = L.find(y => y.l.id === r.dataset.id);
+    if (!x) return;
+    const { l } = x;
+    r.classList.toggle("away", !l.online);
+    const name = r.querySelector(".name");
+    name.textContent = `${l.name} →`;
+    const tog = r.querySelector(".tog");
+    tog.textContent = x.on ? "ON" : "OFF";
+    tog.classList.toggle("on", x.on);
+    tog.setAttribute("aria-label", `Turn ${l.name} ${x.on ? "off" : "on"}`);
+    const fill = r.querySelector(".fill");
+    fill.style.width = `${x.on ? l.level || 0 : 0}%`;
+    fill.style.backgroundColor = x.css;
+    const drag = r.querySelector(".drag");
+    drag.setAttribute("aria-label", `${l.name} brightness`);
+    drag.setAttribute("aria-valuenow", x.on ? l.level : 0);
+  });
+
+  const d = L.find(x => x.l.id === state.detail);
+  if (d) {
+    const idx = state.lights.indexOf(d.l) + 1;
+    $("detail").style.backgroundColor = blend("detail", d.on ? d.rgb : INK);
+    $("detail").classList.toggle("lit", isLight(shown.get("detail")));
+    $("dMeta").textContent = `${String(idx).padStart(2, "0")} / ${d.l.room || ""}`.toUpperCase();
+    $("dName").textContent = d.l.name;
+    $("dBig").textContent = d.on ? d.l.level : 0;
+    $("dTog").textContent = d.on ? "TURN OFF" : "TURN ON";
+    $("dDrag").setAttribute("aria-valuenow", d.on ? d.l.level : 0);
+  }
+}
+
+let last = 0;
+(function loop(ts) {
+  if (ts - last > 33) { state.pt += ((ts - last) / 1000) * state.speed; last = ts; state.t = ts / 1000; render(); }
+  requestAnimationFrame(loop);
+})(0);
+
+async function loadEffects() {
+  try {
+    const r = await fetch("/api/effects");
+    if (!r.ok) return;
+    const e = await r.json();
+    state.effects = e.effects;
+    state.active = e.active;
+    state.speed = e.speed;
+    buildModes();
+  } catch {}
+}
+
+function connect() {
+  const es = new EventSource("/api/stream");
+  es.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if (Date.now() - (touched.get("mode") || 0) > 2500) state.active = d.effects.active;
+    if (Date.now() - (touched.get("speed") || 0) > 2500) state.speed = d.effects.speed;
+    accept(d.lights);
+  };
+  es.onopen = () => { offline = false; };
+  es.onerror = async () => {
+    es.close();
+    try {
+      const r = await fetch("/api/lights");
+      if (r.ok) { accept(await r.json()); offline = false; }
+    } catch {
+      if (!offline) toast("Can't reach the lights hub. Are you on home Wi-Fi?");
+      offline = true;
+    }
+    setTimeout(connect, 2000);
+  };
+}
+let offline = false;
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+buildModes();
+loadEffects();
+connect();
+</script>
+</body>
+</html>
