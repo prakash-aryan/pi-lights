@@ -451,21 +451,26 @@ async function pickMode(key) {
 }
 
 function dragger(el, getValue, onMove, onDone) {
-  let start = null, moving = false;
-  const at = e => { const r = el.getBoundingClientRect(); return clamp(Math.round((e.clientX - r.left) / r.width * 100), 0, 100); };
+  let start = null, moving = false, base = 0;
+  const follow = e => {
+    const raw = base + (e.clientX - start.x) / el.getBoundingClientRect().width * 100;
+    if (raw < 0 || raw > 100) { base = clamp(raw, 0, 100); start.x = e.clientX; }
+    return clamp(Math.round(raw), 0, 100);
+  };
   el.addEventListener("pointerdown", e => { start = { x: e.clientX, y: e.clientY, id: e.pointerId }; moving = false; });
   el.addEventListener("pointermove", e => {
     if (!start) return;
     if (!moving && Math.abs(e.clientX - start.x) > 6 && Math.abs(e.clientX - start.x) > Math.abs(e.clientY - start.y)) {
       moving = true;
+      base = getValue();
       el.setPointerCapture(e.pointerId);
       el.closest(".row")?.classList.add("dragging");
     }
-    if (moving) onMove(at(e));
+    if (moving) onMove(follow(e));
   });
   el.addEventListener("pointerup", e => {
     if (!start) return;
-    onDone(at(e));
+    if (moving) onDone(follow(e));
     el.closest(".row")?.classList.remove("dragging");
     start = null;
   });
