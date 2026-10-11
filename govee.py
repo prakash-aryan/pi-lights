@@ -127,7 +127,7 @@ class GoveeStrip:
         peak = max(scaled)
         if peak == 0:
             return 0, 0, 0
-        return tuple(round(c * max(r, g, b) / peak) for c in scaled)
+        return tuple(round(c * 255 / peak) for c in scaled)
 
     async def send_rgb(self, r, g, b):
         await self.command(0x33, 0x05, 0x15, 0x01, *self.balanced(r, g, b), 0, 0, 0, 0, 0, 0xFF, 0x7F)
