@@ -346,10 +346,11 @@ const online = () => state.lights.filter(l => l.online);
 const lit = () => online().filter(l => l.on);
 
 function setAll(level, final) {
-  const ids = online().map(l => l.id);
-  touch(ids);
-  for (const l of online()) { l.on = level > 0; if (level) { l.level = level; if (!state.active) l.brightness = level; } }
-  const body = level > 0 ? { on: true, brightness: level } : { on: false };
+  const wake = level > 0 && !lit().length;
+  const targets = level > 0 && !wake ? lit() : online();
+  touch(targets.map(l => l.id));
+  for (const l of targets) { l.on = level > 0; if (level) { l.level = level; if (!state.active) l.brightness = level; } }
+  const body = !level ? { on: false } : wake ? { on: true, brightness: level } : { brightness: level, only_lit: true };
   final ? sendAll(body) : sendAllSoon(body);
 }
 async function sendAll(body) {

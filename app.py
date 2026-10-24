@@ -272,7 +272,7 @@ async def effect_light(lid, change):
     if change.on is False:
         engine.paused.add(lid)
         await switch(lid, False)
-    elif change.on is True or (change.brightness and lid in engine.paused):
+    elif change.on is True:
         await switch(lid, True)
         engine.paused.discard(lid)
 
